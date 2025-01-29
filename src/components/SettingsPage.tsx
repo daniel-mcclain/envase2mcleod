@@ -6,6 +6,7 @@ import { useUsers } from '../hooks/useUsers';
 import { useAuth } from '../hooks/useAuth';
 import { Popup } from './Popup';
 import { EditUserModal } from './EditUserModal';
+import { DeleteUserModal } from './DeleteUserModal';
 import { AddUserModal } from './settings/AddUserModal';
 import { UserManagementTable } from './settings/UserManagementTable';
 import { SecuritySettings } from './settings/SecuritySettings';
@@ -17,13 +18,21 @@ export function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
   const [popup, setPopup] = useState<{ show: boolean; type: 'success' | 'error'; message: string }>({
     show: false,
     type: 'success',
     message: ''
   });
   
-  const { users, createUser, updateUserRole, updateUserProfile, updateLastPasswordChange } = useUsers();
+  const { 
+    users, 
+    createUser, 
+    updateUserRole, 
+    updateUserProfile, 
+    updateLastPasswordChange,
+    deleteUser 
+  } = useUsers();
   const { user: currentUser, userRole } = useAuth();
 
   const validatePassword = (password: string): string | null => {
@@ -196,6 +205,23 @@ export function SettingsPage() {
     }
   };
 
+  const handleDeleteUser = async (user: UserProfile) => {
+    try {
+      await deleteUser(user.uid);
+      setPopup({
+        show: true,
+        type: 'success',
+        message: 'User deleted successfully'
+      });
+    } catch (error: any) {
+      setPopup({
+        show: true,
+        type: 'error',
+        message: error.message || 'Failed to delete user'
+      });
+    }
+  };
+
   const isAdmin = userRole === 'admin';
 
   return (
@@ -220,6 +246,14 @@ export function SettingsPage() {
         <AddUserModal
           onClose={() => setShowAddUser(false)}
           onAdd={handleAddUser}
+        />
+      )}
+
+      {userToDelete && (
+        <DeleteUserModal
+          user={userToDelete}
+          onClose={() => setUserToDelete(null)}
+          onDelete={handleDeleteUser}
         />
       )}
 
@@ -272,6 +306,7 @@ export function SettingsPage() {
               <UserManagementTable
                 users={users}
                 onEditUser={setEditingUser}
+                onDeleteUser={setUserToDelete}
                 onRoleChange={handleRoleChange}
               />
             </div>

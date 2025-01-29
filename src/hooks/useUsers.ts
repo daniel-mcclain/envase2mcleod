@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { collection, query, onSnapshot, doc, setDoc, updateDoc, deleteDoc, Timestamp, getDocs, where } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, updateProfile, deleteUser as deleteAuthUser } from 'firebase/auth';
 import { db, auth } from '../lib/firebase';
 import type { UserProfile, UserRole } from '../types/user';
 
@@ -122,6 +122,47 @@ export function useUsers() {
     }
   };
 
+  const deleteUser = async (uid: string) => {
+    try {
+      // Delete user document
+      const userRef = doc(db, 'users', uid);
+      await deleteDoc(userRef);
+
+      // Delete user's task subscriptions
+      const subscriptionsQuery = query(
+        collection(db, 'task_subscriptions'),
+        where('userId', '==', uid)
+      );
+      const subscriptionsSnapshot = await getDocs(subscriptionsQuery);
+      const subscriptionDeletions = subscriptionsSnapshot.docs.map(doc => 
+        deleteDoc(doc.ref)
+      );
+      await Promise.all(subscriptionDeletions);
+
+      // Remove user from task subscribers arrays
+      const tasksQuery = query(
+        collection(db, 'build_tasks'),
+        where('subscribers', 'array-contains', uid)
+      );
+      const tasksSnapshot = await getDocs(tasksQuery);
+      const taskUpdates = tasksSnapshot.docs.map(doc => 
+        updateDoc(doc.ref, {
+          subscribers: doc.data().subscribers.filter((id: string) => id !== uid)
+        })
+      );
+      await Promise.all(taskUpdates);
+
+      // Delete user from Firebase Auth
+      const userRecord = await auth.getUser(uid);
+      if (userRecord) {
+        await deleteAuthUser(userRecord);
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw new Error('Failed to delete user');
+    }
+  };
+
   return {
     users,
     loading,
@@ -130,6 +171,7 @@ export function useUsers() {
     updateUserRole,
     updateUserProfile,
     updateLastLogin,
-    updateLastPasswordChange
+    updateLastPasswordChange,
+    deleteUser
   };
 }
