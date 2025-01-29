@@ -19,7 +19,9 @@ export function BuildStatusPage() {
     reorderTask,
     addSubTask,
     toggleSubTask,
-    deleteSubTask
+    deleteSubTask,
+    subscribeToTask,
+    unsubscribeFromTask
   } = useBuildTasks();
   const { user, userRole } = useAuth();
   const isAdmin = userRole === 'admin';
@@ -81,12 +83,16 @@ export function BuildStatusPage() {
         <TaskList
           tasks={tasks}
           isAdmin={isAdmin}
+          currentUserId={user?.uid || ''}
+          currentUserEmail={user?.email || ''}
           onStatusChange={updateTaskStatus}
           onAddSubTask={addSubTask}
           onToggleSubTask={toggleSubTask}
           onDeleteSubTask={deleteSubTask}
           onDeleteTask={deleteTask}
           onReorderTask={reorderTask}
+          onSubscribe={subscribeToTask}
+          onUnsubscribe={unsubscribeFromTask}
         />
       )}
 

@@ -1,28 +1,36 @@
 import React, { useState } from 'react';
-import { Clock, CheckCircle, AlertTriangle, PauseCircle, Plus, X, ChevronDown, ChevronRight, Trash2, ListChecks, GripVertical } from 'lucide-react';
+import { Clock, CheckCircle, AlertTriangle, PauseCircle, Plus, X, ChevronDown, ChevronRight, Trash2, ListChecks, GripVertical, Lock, Bell, BellOff } from 'lucide-react';
 import type { BuildTask, TaskStatus, SubTask } from '../../types/buildStatus';
 import { formatDate } from '../../utils/dateFormatter';
 
 interface TaskListProps {
   tasks: BuildTask[];
   isAdmin: boolean;
+  currentUserId: string;
+  currentUserEmail: string;
   onStatusChange: (taskId: string, status: TaskStatus) => Promise<void>;
   onAddSubTask: (taskId: string, title: string) => Promise<void>;
   onToggleSubTask: (taskId: string, subTask: SubTask) => Promise<void>;
   onDeleteSubTask: (taskId: string, subTask: SubTask) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
   onReorderTask: (taskId: string, newOrder: number) => Promise<void>;
+  onSubscribe: (taskId: string, userId: string, email: string) => Promise<void>;
+  onUnsubscribe: (taskId: string, userId: string) => Promise<void>;
 }
 
 export function TaskList({ 
   tasks, 
-  isAdmin, 
+  isAdmin,
+  currentUserId,
+  currentUserEmail,
   onStatusChange,
   onAddSubTask,
   onToggleSubTask,
   onDeleteSubTask,
   onDeleteTask,
-  onReorderTask
+  onReorderTask,
+  onSubscribe,
+  onUnsubscribe
 }: TaskListProps) {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [newSubTasks, setNewSubTasks] = useState<Record<string, string>>({});
@@ -106,6 +114,18 @@ export function TaskList({
     setDraggedTask(null);
   };
 
+  const handleSubscriptionToggle = async (task: BuildTask) => {
+    try {
+      if (task.subscribers.includes(currentUserId)) {
+        await onUnsubscribe(task.id, currentUserId);
+      } else {
+        await onSubscribe(task.id, currentUserId, currentUserEmail);
+      }
+    } catch (error) {
+      console.error('Failed to toggle subscription:', error);
+    }
+  };
+
   const getStatusIcon = (status: TaskStatus) => {
     switch (status) {
       case 'completed':
@@ -142,6 +162,7 @@ export function TaskList({
       <ul className="divide-y divide-gray-200">
         {tasks.map((task) => {
           const { total, completed, progress } = getSubTaskStats(task.subTasks);
+          const isSubscribed = task.subscribers.includes(currentUserId);
           
           return (
             <li 
@@ -194,6 +215,21 @@ export function TaskList({
                     </span>
                   </div>
                   <div className="flex items-center space-x-4">
+                    <button
+                      onClick={() => handleSubscriptionToggle(task)}
+                      className={`p-2 rounded-md ${
+                        isSubscribed 
+                          ? 'text-indigo-600 hover:text-indigo-700' 
+                          : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                      title={isSubscribed ? 'Unsubscribe from updates' : 'Subscribe to updates'}
+                    >
+                      {isSubscribed ? (
+                        <Bell className="w-5 h-5" />
+                      ) : (
+                        <BellOff className="w-5 h-5" />
+                      )}
+                    </button>
                     {isAdmin && (
                       <>
                         <select
@@ -235,12 +271,24 @@ export function TaskList({
                     <ul className="space-y-2">
                       {task.subTasks.map((subTask) => (
                         <li key={subTask.id} className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={subTask.completed}
-                            onChange={() => onToggleSubTask(task.id, subTask)}
-                            className="rounded text-indigo-600 focus:ring-indigo-500"
-                          />
+                          {isAdmin ? (
+                            <input
+                              type="checkbox"
+                              checked={subTask.completed}
+                              onChange={() => onToggleSubTask(task.id, subTask)}
+                              className="rounded text-indigo-600 focus:ring-indigo-500"
+                            />
+                          ) : (
+                            <div className="relative flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={subTask.completed}
+                                disabled
+                                className="rounded text-gray-300 cursor-not-allowed"
+                              />
+                              <Lock className="w-3 h-3 text-gray-400 absolute -right-4" />
+                            </div>
+                          )}
                           <span className={`text-sm ${subTask.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
                             {subTask.title}
                           </span>

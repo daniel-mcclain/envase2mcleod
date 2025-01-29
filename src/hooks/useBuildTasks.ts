@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, Timestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, addDoc, deleteDoc, Timestamp, orderBy, arrayUnion, arrayRemove, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import type { BuildTask, TaskStatus, SubTask } from '../types/buildStatus';
+import type { BuildTask, TaskStatus, SubTask, TaskSubscription } from '../types/buildStatus';
 
 export function useBuildTasks() {
   const [tasks, setTasks] = useState<BuildTask[]>([]);
@@ -9,7 +9,6 @@ export function useBuildTasks() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initially fetch without order to prevent index error
     const q = query(
       collection(db, 'build_tasks'),
       orderBy('createdAt', 'asc')
@@ -31,13 +30,12 @@ export function useBuildTasks() {
             updatedAt: data.updatedAt.toDate().toISOString(),
             createdBy: data.createdBy,
             subTasks: data.subTasks || [],
-            order: data.order || 0
+            order: data.order || 0,
+            subscribers: data.subscribers || []
           });
         });
         
-        // Sort tasks by order after fetching
         buildTasks.sort((a, b) => a.order - b.order);
-        
         setTasks(buildTasks);
         setLoading(false);
         setError(null);
@@ -59,7 +57,6 @@ export function useBuildTasks() {
     createdBy: string
   ) => {
     try {
-      // Get the highest order number and add 1
       const maxOrder = tasks.reduce((max, task) => Math.max(max, task.order), 0);
       
       await addDoc(collection(db, 'build_tasks'), {
@@ -179,6 +176,52 @@ export function useBuildTasks() {
     }
   };
 
+  const subscribeToTask = async (taskId: string, userId: string, email: string) => {
+    try {
+      const taskRef = doc(db, 'build_tasks', taskId);
+      
+      // Add user to task's subscribers
+      await updateDoc(taskRef, {
+        subscribers: arrayUnion(userId)
+      });
+
+      // Create subscription record
+      await addDoc(collection(db, 'task_subscriptions'), {
+        taskId,
+        userId,
+        email,
+        createdAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error subscribing to task:', error);
+      throw new Error('Failed to subscribe to task');
+    }
+  };
+
+  const unsubscribeFromTask = async (taskId: string, userId: string) => {
+    try {
+      const taskRef = doc(db, 'build_tasks', taskId);
+      
+      // Remove user from task's subscribers
+      await updateDoc(taskRef, {
+        subscribers: arrayRemove(userId)
+      });
+
+      // Delete subscription record
+      const q = query(collection(db, 'task_subscriptions'));
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach(async (doc) => {
+        const data = doc.data();
+        if (data.taskId === taskId && data.userId === userId) {
+          await deleteDoc(doc.ref);
+        }
+      });
+    } catch (error) {
+      console.error('Error unsubscribing from task:', error);
+      throw new Error('Failed to unsubscribe from task');
+    }
+  };
+
   return {
     tasks,
     loading,
@@ -189,6 +232,8 @@ export function useBuildTasks() {
     reorderTask,
     addSubTask,
     toggleSubTask,
-    deleteSubTask
+    deleteSubTask,
+    subscribeToTask,
+    unsubscribeFromTask
   };
 }
