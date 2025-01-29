@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { Titlebar } from './components/Titlebar';
 import { BillingTable } from './components/BillingTable';
 import { SettingsPage } from './components/SettingsPage';
+import { BuildStatusPage } from './components/BuildStatusPage';
 import { AuthForm } from './components/AuthForm';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { ErrorMessage } from './components/ErrorMessage';
@@ -66,6 +67,7 @@ function App() {
             </>
           )}
 
+          {currentPage === 'build-status' && <BuildStatusPage />}
           {currentPage === 'settings' && <SettingsPage />}
         </main>
       </div>
